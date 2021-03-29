@@ -1,0 +1,365 @@
+---
+title: "TP3G"
+output:
+  html_notebook: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Mohamed BOUDJEMAI
+
+```{r }
+#IMPORTATION DES LIBRERIES 
+#detach("package:miic", unload = TRUE)
+#library(miic)
+#library(ggplot2)
+#library(ggraph)
+#library(igraph)
+#library(Hmisc)
+
+```
+```{r}
+#1. Network reconstruction with the hill-climbing approach
+#1. From the package MIIC, load the cosmicCancer data using the function data().
+#Explore the dataset content, variables and dimensions.
+data(cosmicCancer)
+head(cosmicCancer)
+```
+```{r}
+dim(cosmicCancer)
+```
+```{r}
+names(cosmicCancer)
+```
+```{r}
+describe(cosmicCancer)
+```
+```{r}
+library(dplyr)
+df=data(cosmicCancer)
+glimpse(cosmicCancer)
+```
+```{r}
+summary(cosmicCancer)
+```
+```{r}
+#library(DataExplorer)
+#DataExplorer::create_report(cosmicCancer)
+#_________________________________________________________________________________________________
+#2. Call the hill-climbing approach from the bnlearn package and identify the issues
+#related to the observational data if any. Propose a way to resolve them.
+library(bnlearn)
+#h<-hc(cosmicCancer)
+#Error in check.data(x) : the data set contains NaN/NA values.
+#il des donnC)es manquantes sur le dataset on doit les supprimC)es
+#3. Remove the samples for which at least one variable has a NA value. Use the function
+#complete.cases() to perform this action.
+df=cosmicCancer
+df=df[complete.cases(df), ]
+sum(is.na(df))
+```
+```{r}
+#h<-hc(df)
+#Error in check.data(x) : variable esm1 must have at least two levels.
+#What proportion of the dataset did you remove? 
+#on a retirC) 8% des variables ---->
+df = subset(df, select = -esm1 )
+#h<-hc(df)
+#Error in check.data(x) : variable ebf4 must have at least two levels
+df = subset(df, select = -ebf4 )
+#h<-hc(df)
+#Error in check.data(x) : variable qscn6l1 must have at least two levels.
+df = subset(df, select = -qscn6l1 )
+#Error in check.data(x) : variable cenpa must have at least two levels.
+df = subset(df, select = -cenpa )
+#Error in check.data(x) : variable kntc2 must have at least two levels.
+df = subset(df, select = -kntc2 )
+#Error in check.data(x) : variable orc6l must have at least two levels.
+df = subset(df, select = -orc6l )
+#Error in check.data(x) : variable aytl2 must have at least two levels.
+df = subset(df, select = -aytl2)
+#Error in check.data(x) : variable peci must have at least two levels.
+df = subset(df, select = -peci)
+#variable gstm3 has levels that are not observed in the data.Error in check.data(x) : variable cdkn2a must have at least two levels.
+df = subset(df, select = -gstm3)
+df = subset(df, select = -cdkn2a)
+#Error in check.data(x) : variable cdkn1a must have at least two levels.
+df = subset(df, select = -cdkn1a)
+#Error in check.data(x) : variable foxo1 must have at least two levels.
+df = subset(df, select = -foxo1)
+df=df[, sapply(df, function(col) length(unique(col))) > 1]
+h<-hc(df)
+dim(df)
+#807 176
+
+```
+```{r}
+#What are the concerned variables?
+names(df)
+```
+
+```{r}
+#Call again the hill-climbing approach.
+#NB: The 'Ploidy' variable may be interpreted as 'integer'. If necessary, convert this
+#column into factor type. Furthermore, the variables should have at least 2 levels.
+#Remove the column with constant variable.
+df$Ploidy=as.factor(df$Ploidy)
+df$Ploidy
+h<-hc(df)
+h
+```
+```{r}
+#the adjacency matrix (bnlearn::amat).
+adjmatrixhc<-amat(h)
+
+#4. Convert the hill-climbing network to an igraph object and plot the result. Some
+#variables can have 0 degree. Do not display these variables. Put dierent colors for
+#mutated genes (lower case), over/under expressed genes (upper case) and Ploidy.
+#NB: The graph can be dense. Consider using the function
+#qgraph.layout.fruchtermanreingold from the qgraph package2
+g<-graph_from_adjacency_matrix(adjmatrixhc, diag = FALSE,mode = "directed")
+g = delete.vertices(g, which(igraph::degree(g)==0))
+plot(g)
+neighbors(g, 'Ploidy')
+```
+```{r}
+library(qgraph)
+# color nodes
+  colors = rep("orange", length(V(g)))
+  colors[names(V(g)) == tolower(names(V(g)))] = "yellow"
+  colors[names(V(g)) == "Ploidy"] = "green"
+
+e=get.edgelist(g, names = F)
+l=qgraph.layout.fruchtermanreingold(e,vcount = vcount(g),area=100*(vcount(g)^2),
+                                    repulse.rad =(vcount(g)^1.1) )
+plot(g,edge.arrow.size=0.05,layout=l, vertex.color=colors)
+```
+```{r}
+#5. Idendify the mutated genes (lower case nodes) that are signicantly related to gene
+#expression (upper case nodes). Identify also the variables related to the 'Ploidy'
+#property. On which nodes are centered the hubs? Get top 10 nodes and edges in
+#terms of betweenness centrality measure.
+lc_most_related_to_uc = function(graph) {
+  l=list()
+  for(node in names(V(graph))) {
+    if (node == tolower(node)) { l[node]=0 }
+  }
+  for(i in 1:nrow(get.edgelist(graph))) {
+    r <- get.edgelist(graph)[i,]
+    if (r[1] == toupper(r[1]) & r[2] == tolower(r[2])) { l[r[2]]=l[[r[2]]]+1}
+    if (r[2] == toupper(r[2]) & r[1] == tolower(r[1])) { l[r[1]]=l[[r[1]]]+1}
+  }
+  return(sort(unlist(l), decreasing=T))
+}
+lc_most_related_to_uc(g)
+
+```
+
+
+```{r}
+sort(hub_score(g)$vector, decreasing = TRUE)[1:10]
+```
+
+
+```{r}
+sort(betweenness(g), decreasing = TRUE)[1:10]
+
+```
+```{r}
+
+#______________________________________________________________________________________
+#2. Network reconstruction with the PC approach
+#1. From the package MIIC, load the cosmicCancer data using the function data().
+#Explore the dataset content, variables and dimensions.
+df2=cosmicCancer
+head(df2)
+```
+```{r}
+dim(df2)
+```
+```{r}
+#2. Call the PC approach from the pcalg package and identify the issues related to the
+#observational data if any. Propose a way to resolve them.
+#NB: Follow the example given in the documentation to call PC. Use the 'disc' in-
+#dependence test.
+library(pcalg)
+df2=df2[complete.cases(df2), ]
+sum(is.na(df2))
+df2$Ploidy=as.factor(df2$Ploidy)
+df2=df2[, sapply(df2, function(col) length(unique(col))) > 1]
+# Convert your dataset to numeric using data.matrix
+df2= data.matrix(df2) 
+#Make the categories start from 0.
+df2=df2 - 1 
+# Compute the number of levels for each variable
+nlevels = apply(df2, 2, function(x) length(unique(x)))
+# Prepare the suffStat object (see pc help)
+suffStat = list(dm=df2, nlev=nlevels, adaptDF=FALSE)
+#pcl <- pc(suffStat, disCItest, labels = colnames(df2), alpha=0.05,  verbose = FALSE)
+#Error in if (any(as.integer(dm) != dm)) stop("'dm' must be discrete, with values in {0,1,..}") : 
+# missing value where TRUE/FALSE needed
+#il des donnC)es manquantes sur le dataset on doit les supprimC)es
+#3. Remove the samples for which at least one variable has a NA value. Use the function
+#complete.cases() to perform this action. What proportion of the dataset did you
+#remove? What are the concerned variables? 
+
+```
+
+```{r}
+
+#Call again the PC approach.
+pcl <- pc(suffStat, disCItest, labels = colnames(df2), alpha=0.5,  verbose = FALSE)
+#NB: The Ploidy variable may be interpreted as 'integer'. If necessary, convert this
+#column into factor type. Furthermore, the variables should have at least 2 levels.
+#Remove the column with constant variable. You should also convert all the factor
+#into their levels, with the rst level being 0.
+pcl
+```
+```{r}
+pc2<-as.bn(pcl)
+amat(pc2)
+```
+```{r}
+#4. Convert the PC network to a bn object then to an igraph object and plot the result.
+#Some variables can have 0 degree. Do not display these variables. Put dierent
+#colors for mutated genes (lower case), over/under expressed genes (upper case) and
+#Ploidy.
+#NB: The graph can be dense. Consider using the function
+#qgraph.layout.fruchtermanreingold from the qgraph package3
+g<-graph_from_adjacency_matrix(amat(pc2), diag = FALSE,mode = "directed")
+g = delete.vertices(g, which(igraph::degree(g)==0))
+plot(g)
+neighbors(g, 'Ploidy')
+```
+```{r}
+library(qgraph)
+# color nodes
+  colors = rep("orange", length(V(g)))
+  colors[names(V(g)) == tolower(names(V(g)))] = "yellow"
+  colors[names(V(g)) == "Ploidy"] = "green"
+
+e=get.edgelist(g, names = F)
+l=qgraph.layout.fruchtermanreingold(e,vcount = vcount(g),area=100*(vcount(g)^2),
+                                    repulse.rad =(vcount(g)^1.1) )
+plot(g,edge.arrow.size=0.05,layout=l, vertex.color=colors)
+
+```
+```{r}
+#5. Produce several graphs at different signiffcance levels.
+sort(hub_score(g)$vector, decreasing = TRUE)[1:10]
+sort(betweenness(g), decreasing = TRUE)[1:10]
+```
+```{r}
+#6. Idendify the mutated genes (lower case nodes) that are signicantly related to gene
+#expression (upper case nodes). Identify also the variables related to the Ploidy
+#property. On which nodes are centered the hubs? Get top 10 nodes and edges on
+#terms of betweenness centrality measure.
+lc_most_related_to_uc = function(graph) {
+  l=list()
+  for(node in names(V(graph))) {
+    if (node == tolower(node)) { l[node]=0 }
+  }
+  for(i in 1:nrow(get.edgelist(graph))) {
+    r <- get.edgelist(graph)[i,]
+    if (r[1] == toupper(r[1]) & r[2] == tolower(r[2])) { l[r[2]]=l[[r[2]]]+1}
+    if (r[2] == toupper(r[2]) & r[1] == tolower(r[1])) { l[r[1]]=l[[r[1]]]+1}
+  }
+  return(sort(unlist(l), decreasing=T))
+}
+lc_most_related_to_uc(g)
+```
+```{r}
+#3. Network reconstruction with the MIIC approach_________________________________________________
+#1. Follow the example from the documentation to build the cosmicCancer network
+#with MIIC.
+data(cosmicCancer)
+data(cosmicCancer_stateOrder)
+# execute MIIC (reconstruct graph)
+miic.res <- miic(
+  input_data = cosmicCancer, state_order = cosmicCancer_stateOrder, latent = "yes",
+  n_shuffles = 100, conf_threshold = 0.001
+)
+
+# plot graph
+if(require(igraph)) {
+ plot(miic.res)
+}
+
+```
+```{r}
+#2. Explain the arguments confidenceShuffle and confidenceThreshold. Get sev-
+#eral networks with different values for these arguments
+#n_shuffles
+#[un entier positif] Le nombre de remaniements du jeu de donnC)es d'origine afin d'C)valuer le #rapport de confiance spC)cifique aux arC*tes de toutes les arC*tes infC)rC)es.
+
+#conf_threshold
+#[une virgule flottante positive] Le seuil utilisC) pour filtrer les arC*tes les moins probables #suivant l'C)tape du squelette. Voir Verny et al., PLoS Comp. Bio. 2017
+miic.res <- miic(
+  input_data = cosmicCancer, state_order = cosmicCancer_stateOrder, latent = "yes",
+  n_shuffles = 900, conf_threshold = 0.002
+)
+
+# plot graph
+if(require(igraph)) {
+ plot(miic.res)
+}
+
+```
+```{r}
+#3. Convert the MIIC network to an igraph object and plot the result. Some variables
+#can have 0 degree. Do not display these variables. Put dierent colors for mutated
+#genes (lower case), over/under expressed genes (upper case) and Ploidy.
+#NB: The graph can be dense. Consider using the function
+#qgraph.layout.fruchtermanreingold from the qgraph package4.
+g<-graph_from_adjacency_matrix(miic.res$adj_matrix, diag = FALSE,mode = "directed")
+g = delete.vertices(g, which(igraph::degree(g)==0))
+plot(g)
+neighbors(g, 'Ploidy')
+```
+```{r}
+library(qgraph)
+# color nodes
+  colors = rep("orange", length(V(g)))
+  colors[names(V(g)) == tolower(names(V(g)))] = "yellow"
+  colors[names(V(g)) == "Ploidy"] = "green"
+
+e=get.edgelist(g, names = F)
+l=qgraph.layout.fruchtermanreingold(e,vcount = vcount(g),area=100*(vcount(g)^2),
+                                    repulse.rad =(vcount(g)^1.1) )
+plot(g,edge.arrow.size=0.05,layout=l, vertex.color=colors)
+```
+```{r}
+#4. Use also the cytoscape fonctionality to produce a MIIC plot with your preferred
+#network.
+miic.write.network.cytoscape(miic.res, file="C:/INFO DESCARTES/M2/Graphes", layout = NULL)
+```
+
+```{r}
+#5. Idendify the mutated genes (lower case nodes) that are signiffcantly related to gene
+#expression (upper case nodes). Identify also the variables related to the 'Ploidy' prop-
+#erty. On which nodes are centered the hubs? Get top 10 nodes and edges on terms of
+#betweenness centrality measure.
+lc_most_related_to_uc = function(graph) {
+  l=list()
+  for(node in names(V(graph))) {
+    if (node == tolower(node)) { l[node]=0 }
+  }
+  for(i in 1:nrow(get.edgelist(graph))) {
+    r <- get.edgelist(graph)[i,]
+    if (r[1] == toupper(r[1]) & r[2] == tolower(r[2])) { l[r[2]]=l[[r[2]]]+1}
+    if (r[2] == toupper(r[2]) & r[1] == tolower(r[1])) { l[r[1]]=l[[r[1]]]+1}
+  }
+  return(sort(unlist(l), decreasing=T))
+}
+lc_most_related_to_uc(g)
+```
+```{r}
+sort(hub_score(g)$vector, decreasing = TRUE)[1:10]
+sort(betweenness(g), decreasing = TRUE)[1:10]
+```
+
+

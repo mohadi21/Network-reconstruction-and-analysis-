@@ -1,0 +1,148 @@
+---
+title: "NETWORK RECONSTRACTION AND ANALYSIS  TP1"
+output:
+  pdf_document: default
+  html_notebook: default
+  word_document: default
+---
+
+Mohamed BOUDJEMAI 
+
+```{r}
+#IMPORTATION DES LIBRERIES 
+detach("package:miic", unload = TRUE)
+library(miic)
+library(ggplot2)
+library(ggraph)
+library(igraph)
+library(Hmisc)
+```
+
+
+```{r}
+# 1. TF Correlation network
+#exploration de hematoData dataset et Fournir les caractC)ristiques
+
+data("hematoData")
+head(hematoData)
+
+```
+
+
+```{r}
+my_data = as.matrix(hematoData)
+summary(hematoData)
+```
+
+
+```{r}
+dim(hematoData)
+```
+
+
+```{r}
+names(hematoData)
+```
+
+
+```{r}
+describe(hematoData)
+```
+
+
+```{r}
+# Calculer les coefficients de corrC)lation par paires
+# et leur significativitC)
+# -
+res_corr <- rcorr(my_data, type="pearson")
+res_corr
+```
+
+
+```{r}
+# On obtient 2 matrices
+# $ r: corrC)lation de Pearson ou rho de Spearman
+# $ P: valeurs p de corrC)lation
+graph_corrs <- graph_from_adjacency_matrix(res_corr$r,
+diag = FALSE,
+weight = TRUE,
+mode = "undirected")
+plot(graph_corrs, layout=layout_with_dh)
+# le graphe gC)nC)rale des diffC)rente  relation entre les cellules 
+
+```
+
+
+```{r}
+#personnalisation
+# Filtrer les corrC)lations C  partir des corrC)lations 
+thresh = 0.7
+res_corr_filter_corr <- res_corr$r
+res_corr_filter_corr[abs(res_corr$r) < thresh] <- 0
+graph_corrs_filter_corr <- graph_from_adjacency_matrix(res_corr_filter_corr, diag = FALSE, weight = TRUE, mode = "undirected")
+plot(graph_corrs_filter_corr, layout=layout_with_dh)
+```
+
+
+```{r}
+# Utiliser la corrC)lation pour la largeur et les couleurs des bords
+plot(graph_corrs_filter_corr, 
+     layout=layout_with_dh, 
+     edge.width = abs(E(graph_corrs_filter_corr)$weight),
+     edge.color = ifelse(E(graph_corrs_filter_corr)$weight > 0, 
+                         "blue","red"))
+```
+
+
+```{r}
+# 2.RC)seau de corrC)lation partielle TF
+
+data("hematoData")
+hematoData
+is.factor(hematoData[,1])
+
+hematoData_int = hematoData
+for(iCol in c(1:ncol(hematoData))){
+hematoData_int[,iCol] <- as.numeric(as.character(hematoData[,iCol]))
+}
+
+is.factor(hematoData_int[,1])
+is.numeric(hematoData_int[,1])
+
+hematoData_int
+```
+
+
+```{r}
+# la matrice de covariance 
+hemato_cov = cov(hematoData_int)
+#ajout de lamda 
+diag(hemato_cov) <- diag(hemato_cov)+0.7
+hemato_cov
+#l'inverce de la matrice de covariance 
+res_cov = solve(hemato_cov)
+res_cov
+```
+
+
+```{r}
+dim(res_cov)
+#matrice carC)e
+```
+
+
+```{r}
+thresh = 0.1
+
+res_corr_filter_corr <- res_cov
+res_corr_filter_corr[abs(res_cov) < thresh] <- 0
+graph_corrs_filter_corr <- graph_from_adjacency_matrix(res_corr_filter_corr, diag = FALSE, weight = TRUE, mode = "undirected")
+plot(graph_corrs_filter_corr, layout=layout_with_dh)
+# le lamda influe sur la reconstruction du graphe
+plot(graph_corrs_filter_corr, 
+     layout=layout_with_dh, 
+     edge.width = abs(E(graph_corrs_filter_corr)$weight),
+     edge.color = ifelse(E(graph_corrs_filter_corr)$weight > 0, 
+                         "blue","red"))
+ 
+```
